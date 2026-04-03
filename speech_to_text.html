@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VoiceScribe — Speech to Text</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0e0c0a;
+    --surface: #181512;
+    --surface2: #221e19;
+    --border: #2e2820;
+    --border2: #3d3428;
+    --amber: #d4880c;
+    --amber-dim: #7a4e07;
+    --amber-glow: rgba(212,136,12,0.12);
+    --text: #e8dfd0;
+    --text-muted: #7a6e60;
+    --text-dim: #4a4138;
+    --red: #c0392b;
+    --green: #2a7a4a;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+
+  .logo {
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--amber);
+    margin-bottom: 8px;
+    font-weight: 300;
+  }
+
+  h1 {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(36px, 6vw, 62px);
+    font-weight: 600;
+    line-height: 1.05;
+    color: var(--text);
+    letter-spacing: -0.02em;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--amber);
+  }
+
+  .subtitle {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-top: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .card {
+    width: 100%;
+    max-width: 740px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .card-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .status-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: background 0.3s;
+  }
+  .status-dot.active { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+  .status-dot.live { animation: pulse 1s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 6px var(--amber); }
+    50% { opacity: 0.4; box-shadow: none; }
+  }
+
+  /* Visualizer */
+  .visualizer-wrap {
+    padding: 28px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  canvas#visualizer {
+    width: 100%;
+    height: 72px;
+    border-radius: 2px;
+    display: block;
+  }
+
+  /* Controls */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .btn-record {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 0 28px;
+    height: 48px;
+    background: var(--amber);
+    border: none;
+    border-radius: 3px;
+    color: #0e0c0a;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+  }
+  .btn-record:hover { opacity: 0.88; }
+  .btn-record:active { transform: scale(0.97); }
+  .btn-record.recording { background: var(--red); color: #fff; }
+
+  .btn-record .rec-icon {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #0e0c0a;
+    flex-shrink: 0;
+  }
+  .btn-record.recording .rec-icon { background: #fff; animation: pulse 0.9s infinite; }
+
+  .btn-secondary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 20px;
+    height: 48px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s;
+  }
+  .btn-secondary:hover { border-color: var(--amber-dim); color: var(--text); }
+
+  .lang-select {
+    height: 48px;
+    padding: 0 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+    outline: none;
+  }
+  .lang-select:focus { border-color: var(--amber-dim); }
+
+  /* Transcript area */
+  .transcript-wrap {
+    padding: 20px;
+  }
+
+  .transcript-area-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  #transcript-box {
+    width: 100%;
+    min-height: 180px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 16px;
+    font-family: 'DM Mono', monospace;
+    font-size: 14px;
+    line-height: 1.75;
+    color: var(--text);
+    resize: vertical;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  #transcript-box:focus { border-color: var(--amber-dim); }
+  #transcript-box::placeholder { color: var(--text-dim); font-style: italic; }
+
+  #interim-display {
+    min-height: 24px;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--amber-dim);
+    font-style: italic;
+    letter-spacing: 0.03em;
+    padding: 0 4px;
+    transition: opacity 0.2s;
+  }
+
+  /* Stats bar */
+  .stats-bar {
+    display: flex;
+    gap: 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .stat {
+    flex: 1;
+    padding: 10px 16px;
+    border-right: 1px solid var(--border);
+    text-align: center;
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-val {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--amber);
+    display: block;
+  }
+  .stat-lbl {
+    font-size: 9px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-top: 2px;
+    display: block;
+  }
+
+  /* Action row */
+  .action-row {
+    padding: 14px 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .btn-action {
+    padding: 8px 16px;
+    background: transparent;
+    border: 1px solid var(--border2);
+    border-radius: 3px;
+    color: var(--text-muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn-action:hover { border-color: var(--amber-dim); color: var(--text); }
+
+  .notice {
+    margin-top: 20px;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    color: var(--text-dim);
+    text-align: center;
+    max-width: 540px;
+  }
+
+  .error-banner {
+    display: none;
+    background: rgba(192,57,43,0.12);
+    border: 1px solid rgba(192,57,43,0.3);
+    border-radius: 3px;
+    color: #e57373;
+    font-size: 11px;
+    padding: 10px 16px;
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+    width: 100%;
+    max-width: 740px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <p class="logo">VoiceScribe</p>
+  <h1>Speech<br/><em>to Text</em></h1>
+  <p class="subtitle">Real-time voice transcription — powered by Web Speech API</p>
+</header>
+
+<div class="error-banner" id="error-banner"></div>
+
+<div class="card">
+  <!-- Header bar -->
+  <div class="card-header">
+    <span class="card-label">Transcription Engine</span>
+    <span class="status-pill">
+      <span class="status-dot" id="status-dot"></span>
+      <span id="status-text">Idle</span>
+    </span>
+  </div>
+
+  <!-- Visualizer + controls -->
+  <div class="visualizer-wrap">
+    <canvas id="visualizer" width="700" height="72"></canvas>
+    <div class="controls">
+      <select class="lang-select" id="lang-select">
+        <option value="en-US">English (US)</option>
+        <option value="en-GB">English (UK)</option>
+        <option value="hi-IN">Hindi</option>
+        <option value="fr-FR">French</option>
+        <option value="de-DE">German</option>
+        <option value="es-ES">Spanish</option>
+        <option value="pt-BR">Portuguese (BR)</option>
+        <option value="ja-JP">Japanese</option>
+        <option value="zh-CN">Mandarin</option>
+        <option value="ar-SA">Arabic</option>
+      </select>
+      <button class="btn-record" id="btn-record">
+        <span class="rec-icon"></span>
+        <span id="btn-label">Start Recording</span>
+      </button>
+      <button class="btn-secondary" id="btn-clear">Clear</button>
+    </div>
+  </div>
+
+  <!-- Transcript -->
+  <div class="transcript-wrap">
+    <p class="transcript-area-label">Transcript</p>
+    <textarea id="transcript-box" placeholder="Your transcription will appear here...&#10;&#10;Click 'Start Recording' and begin speaking."></textarea>
+    <div id="interim-display"></div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-bar">
+    <div class="stat">
+      <span class="stat-val" id="stat-words">0</span>
+      <span class="stat-lbl">Words</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="stat-chars">0</span>
+      <span class="stat-lbl">Chars</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="stat-time">0:00</span>
+      <span class="stat-lbl">Duration</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val" id="stat-conf">—</span>
+      <span class="stat-lbl">Confidence</span>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="action-row">
+    <button class="btn-action" id="btn-copy">Copy Text</button>
+    <button class="btn-action" id="btn-download">Download .txt</button>
+  </div>
+</div>
+
+<p class="notice">
+  Microphone permission required. Transcription runs entirely in your browser — no audio is sent to any server.
+  Best results in Chrome or Edge. Firefox has limited support.
+</p>
+
+<script>
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const btnRecord = document.getElementById('btn-record');
+const btnLabel = document.getElementById('btn-label');
+const btnClear = document.getElementById('btn-clear');
+const btnCopy = document.getElementById('btn-copy');
+const btnDownload = document.getElementById('btn-download');
+const transcriptBox = document.getElementById('transcript-box');
+const interimDisplay = document.getElementById('interim-display');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const langSelect = document.getElementById('lang-select');
+const errorBanner = document.getElementById('error-banner');
+const canvas = document.getElementById('visualizer');
+const ctx = canvas.getContext('2d');
+
+let recognition = null;
+let isRecording = false;
+let finalTranscript = '';
+let startTime = null;
+let timerInterval = null;
+let audioCtx = null;
+let analyser = null;
+let animFrame = null;
+let stream = null;
+
+function showError(msg) {
+  errorBanner.textContent = msg;
+  errorBanner.style.display = 'block';
+  setTimeout(() => errorBanner.style.display = 'none', 6000);
+}
+
+function setStatus(state) {
+  statusDot.className = 'status-dot' + (state === 'active' ? ' active live' : state === 'ready' ? ' active' : '');
+  statusText.textContent = state === 'active' ? 'Recording' : state === 'ready' ? 'Ready' : 'Idle';
+}
+
+function updateStats(conf) {
+  const text = transcriptBox.value.trim();
+  const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+  document.getElementById('stat-words').textContent = words;
+  document.getElementById('stat-chars').textContent = text.length;
+  if (conf !== undefined) {
+    document.getElementById('stat-conf').textContent = Math.round(conf * 100) + '%';
+  }
+}
+
+function startTimer() {
+  startTime = Date.now();
+  timerInterval = setInterval(() => {
+    const s = Math.floor((Date.now() - startTime) / 1000);
+    const m = Math.floor(s / 60);
+    document.getElementById('stat-time').textContent = m + ':' + String(s % 60).padStart(2, '0');
+  }, 500);
+}
+
+function stopTimer() { clearInterval(timerInterval); }
+
+/* Audio visualizer */
+async function startVisualizer() {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 128;
+    const src = audioCtx.createMediaStreamSource(stream);
+    src.connect(analyser);
+    drawVisualizer();
+  } catch (e) { drawIdle(); }
+}
+
+function stopVisualizer() {
+  cancelAnimationFrame(animFrame);
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  drawIdle();
+}
+
+function drawIdle() {
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#2e2820';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H / 2);
+  ctx.lineTo(W, H / 2);
+  ctx.stroke();
+}
+
+function drawVisualizer() {
+  animFrame = requestAnimationFrame(drawVisualizer);
+  const W = canvas.width, H = canvas.height;
+  const bufLen = analyser.frequencyBinCount;
+  const data = new Uint8Array(bufLen);
+  analyser.getByteTimeDomainData(data);
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#d4880c';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  const sliceW = W / bufLen;
+  let x = 0;
+  for (let i = 0; i < bufLen; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * H) / 2;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    x += sliceW;
+  }
+  ctx.lineTo(W, H / 2);
+  ctx.stroke();
+}
+
+/* Speech recognition */
+function initRecognition() {
+  if (!SpeechRecognition) {
+    showError('Speech Recognition is not supported in this browser. Please use Chrome or Edge.');
+    return null;
+  }
+  const r = new SpeechRecognition();
+  r.lang = langSelect.value;
+  r.continuous = true;
+  r.interimResults = true;
+  r.maxAlternatives = 1;
+
+  r.onstart = () => {
+    setStatus('active');
+    startTimer();
+  };
+
+  r.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const res = e.results[i];
+      if (res.isFinal) {
+        finalTranscript += res[0].transcript + ' ';
+        updateStats(res[0].confidence);
+      } else {
+        interim += res[0].transcript;
+      }
+    }
+    transcriptBox.value = finalTranscript;
+    interimDisplay.textContent = interim ? '…' + interim : '';
+    if (!interim) updateStats();
+    transcriptBox.scrollTop = transcriptBox.scrollHeight;
+  };
+
+  r.onerror = (e) => {
+    const msgs = {
+      'not-allowed': 'Microphone access denied. Please allow mic permissions.',
+      'no-speech': 'No speech detected. Try again.',
+      'network': 'Network error during recognition.',
+      'audio-capture': 'No microphone found.',
+    };
+    showError(msgs[e.error] || 'Error: ' + e.error);
+    stopRecording();
+  };
+
+  r.onend = () => {
+    if (isRecording) r.start();
+  };
+
+  return r;
+}
+
+function startRecording() {
+  recognition = initRecognition();
+  if (!recognition) return;
+  isRecording = true;
+  finalTranscript = transcriptBox.value;
+  recognition.start();
+  startVisualizer();
+  btnRecord.classList.add('recording');
+  btnLabel.textContent = 'Stop Recording';
+  langSelect.disabled = true;
+}
+
+function stopRecording() {
+  isRecording = false;
+  if (recognition) { recognition.onend = null; recognition.stop(); recognition = null; }
+  stopVisualizer();
+  stopTimer();
+  interimDisplay.textContent = '';
+  setStatus('idle');
+  btnRecord.classList.remove('recording');
+  btnLabel.textContent = 'Start Recording';
+  langSelect.disabled = false;
+  updateStats();
+}
+
+btnRecord.addEventListener('click', () => {
+  isRecording ? stopRecording() : startRecording();
+});
+
+btnClear.addEventListener('click', () => {
+  finalTranscript = '';
+  transcriptBox.value = '';
+  interimDisplay.textContent = '';
+  document.getElementById('stat-words').textContent = '0';
+  document.getElementById('stat-chars').textContent = '0';
+  document.getElementById('stat-conf').textContent = '—';
+  document.getElementById('stat-time').textContent = '0:00';
+  if (timerInterval) { clearInterval(timerInterval); }
+});
+
+btnCopy.addEventListener('click', () => {
+  if (!transcriptBox.value.trim()) return;
+  navigator.clipboard.writeText(transcriptBox.value).then(() => {
+    btnCopy.textContent = 'Copied!';
+    setTimeout(() => btnCopy.textContent = 'Copy Text', 1800);
+  });
+});
+
+btnDownload.addEventListener('click', () => {
+  const text = transcriptBox.value.trim();
+  if (!text) return;
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'transcript-' + new Date().toISOString().slice(0, 10) + '.txt';
+  a.click();
+});
+
+drawIdle();
+setStatus('idle');
+</script>
+</body>
+</html>
